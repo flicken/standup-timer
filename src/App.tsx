@@ -124,7 +124,6 @@ function App() {
 
   return (
     <div style={{ maxWidth: "500px", margin: "auto" }}>
-      <h3>Standup Timer</h3>
       <div>
         <samp style={{ fontSize: 50 }}>
           {state.inProgress ? state.inProgress.time + `s` : timerState}
