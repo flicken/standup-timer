@@ -3,6 +3,8 @@ import "./App.css";
 
 import produce from "immer";
 
+import { Footer } from "./Footer";
+
 type Person = {
   name: string;
   time: number;
@@ -170,6 +172,7 @@ function App() {
       {totalTime !== undefined && (
         <samp>{formatTime(totalTime) + ` total`}</samp>
       )}
+      <Footer />
     </div>
   );
 }
