@@ -8,7 +8,7 @@ type Person = {
   time: number;
 };
 
-type TimerState = "Ready" | "Playing" | "Done";
+type TimerState = "Waiting" | "Ready" | "Playing" | "Done";
 
 type State = {
   onDeck: string[];
@@ -32,7 +32,9 @@ function App() {
   });
 
   var timerState: TimerState = "Ready";
-  if (state.inProgress) {
+  if (people.length === 0) {
+    timerState = "Waiting";
+  } else if (state.inProgress) {
     timerState = "Playing";
   } else if (state.onDeck.length === 0) {
     timerState = "Done";
@@ -111,6 +113,7 @@ function App() {
     Ready: <button onClick={handleNext}>Start</button>,
     Playing: <button onClick={handleNext}>Next</button>,
     Done: <>All done!</>,
+    Waiting: <>Please enter at least one name.</>,
   };
 
   var totalTime = state.inProgress?.time;
@@ -152,7 +155,14 @@ function App() {
           ))}
           <p></p>
           <div>
-            <AddPerson onAdd={handleAdd} />
+            <AddPerson
+              onAdd={handleAdd}
+              placeholder={
+                timerState === "Playing" || timerState === "Done"
+                  ? "Late arrival"
+                  : "Enter a name"
+              }
+            />
           </div>
         </samp>
         <p></p>
@@ -173,7 +183,13 @@ function formatTime(seconds: number): string {
   return [m > 9 ? m : "0" + m || "0", s > 9 ? s : "0" + s].join(":");
 }
 
-function AddPerson({ onAdd }: { onAdd: (a: string) => any }) {
+function AddPerson({
+  onAdd,
+  placeholder,
+}: {
+  onAdd: (a: string) => any;
+  placeholder: string;
+}) {
   const [value, setValue] = useState<string>("");
 
   return (
@@ -190,7 +206,7 @@ function AddPerson({ onAdd }: { onAdd: (a: string) => any }) {
     >
       <input
         type="text"
-        placeholder="Late arrival"
+        placeholder={placeholder}
         value={value}
         onChange={(e) => setValue(e.target.value)}
       ></input>
