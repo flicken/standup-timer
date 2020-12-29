@@ -5,6 +5,9 @@ import produce from "immer";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 
 import { Footer } from "./Footer";
+import { shuffle } from "./utils";
+import OnDeck from "./OnDeck";
+import AddPerson from "./AddPerson";
 
 type Person = {
   name: string;
@@ -43,6 +46,21 @@ function App() {
     timerState = "Done";
   }
 
+  const handleDelete = (name: string, index: number) => {
+    if (people.indexOf(name) !== -1) {
+      setPeople((p) => {
+        const newPeople = p.filter((n: string) => n !== name);
+        localStorage.setItem("people", JSON.stringify(newPeople));
+        return newPeople;
+      });
+      setState(
+        produce((draft) => {
+          draft.onDeck = draft.onDeck.filter((n: string) => n !== name);
+        })
+      );
+    }
+  };
+
   const handleAdd = (name: string) => {
     if (people.indexOf(name) === -1) {
       setPeople((p) => {
@@ -53,21 +71,6 @@ function App() {
       setState(
         produce((draft) => {
           draft.onDeck.push(name);
-        })
-      );
-    }
-  };
-
-  const handleDelete = (name: string) => {
-    if (people.indexOf(name) !== -1) {
-      setPeople((p) => {
-        const newPeople = p.filter((n: string) => n !== name);
-        localStorage.setItem("people", JSON.stringify(newPeople));
-        return newPeople;
-      });
-      setState(
-        produce((draft) => {
-          draft.onDeck = draft.onDeck.filter((n: string) => n !== name);
         })
       );
     }
@@ -150,63 +153,18 @@ function App() {
               </b>
             </div>
           )}
-          <DragDropContext
-            onDragEnd={(result) => {
-              if (!result.destination) {
-                return;
-              }
-
-              const items = reorder(
-                state.onDeck,
-                result.source.index,
-                result.destination.index
-              );
-
-              setState(
-                produce((s) => {
-                  s.onDeck = items;
-                  return;
-                })
-              );
-            }}
-          >
-            <Droppable droppableId="droppable">
-              {(provided, snapshot) => (
-                <div
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                  style={getListStyle(snapshot.isDraggingOver)}
-                >
-                  {state.onDeck.map((name, index) => (
-                    <Draggable
-                      key={`onDeck.${index}`}
-                      draggableId={`onDeck.${index}`}
-                      index={index}
-                    >
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          style={getItemStyle(
-                            snapshot.isDragging,
-                            provided.draggableProps.style
-                          )}
-                        >
-                          <span onClick={(e) => handleDelete(name)}>
-                            {deleteIcon}
-                          </span>
-                          {name}
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </DragDropContext>
           <p></p>
+          <OnDeck
+            names={state.onDeck}
+            setNames={(names) =>
+              setState(
+                produce((state) => {
+                  state.onDeck = names;
+                })
+              )
+            }
+            handleDelete={handleDelete}
+          />
           <div>
             <AddPerson
               onAdd={handleAdd}
@@ -236,81 +194,3 @@ function formatTime(seconds: number): string {
 
   return [m > 9 ? m : "0" + m || "0", s > 9 ? s : "0" + s].join(":");
 }
-
-function AddPerson({
-  onAdd,
-  placeholder,
-}: {
-  onAdd: (a: string) => any;
-  placeholder: string;
-}) {
-  const [value, setValue] = useState<string>("");
-
-  return (
-    <form
-      id="person-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-
-        if (value) {
-          onAdd(value);
-          setValue("");
-        }
-      }}
-    >
-      <input
-        type="text"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-      ></input>
-      <button type="submit">Add</button>
-    </form>
-  );
-}
-
-const deleteIcon = (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    height="20"
-    viewBox="0 0 24 24"
-    width="20"
-  >
-    <path d="M0 0h24v24H0z" fill="none" />
-    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-  </svg>
-);
-
-function shuffle<T>(unshuffled: T[]): T[] {
-  return unshuffled
-    .map((a) => ({ sort: Math.random(), value: a }))
-    .sort((a, b) => a.sort - b.sort)
-    .map((a) => a.value);
-}
-
-function reorder<T>(list: T[], startIndex: number, endIndex: number): T[] {
-  const result = Array.from(list);
-  const [removed] = result.splice(startIndex, 1);
-  result.splice(endIndex, 0, removed);
-
-  return result;
-}
-
-const grid = 8;
-
-const getListStyle = (isDraggingOver: boolean) => ({
-  // background: isDraggingOver ? "lightgrey" : undefined,
-  padding: grid,
-  width: 250,
-});
-
-const getItemStyle = (isDragging: boolean, draggableStyle: any) => ({
-  // some basic styles to make the items look a bit nicer
-  userSelect: "none",
-  // padding: grid * 2,
-  marginBottom: `${grid}px`,
-  // margin: `0 0 ${grid}px 0`,
-
-  // styles we need to apply on draggables
-  ...draggableStyle,
-});
