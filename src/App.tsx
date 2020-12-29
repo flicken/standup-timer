@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import "./App.css";
 
 import produce from "immer";
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 
 import { Footer } from "./Footer";
 
@@ -149,12 +150,62 @@ function App() {
               </b>
             </div>
           )}
-          {state.onDeck.map((name, i) => (
-            <div key={`on-deck-${i}`}>
-              <span onClick={(e) => handleDelete(name)}>{deleteIcon}</span>
-              {name}
-            </div>
-          ))}
+          <DragDropContext
+            onDragEnd={(result) => {
+              if (!result.destination) {
+                return;
+              }
+
+              const items = reorder(
+                state.onDeck,
+                result.source.index,
+                result.destination.index
+              );
+
+              setState(
+                produce((s) => {
+                  s.onDeck = items;
+                  return;
+                })
+              );
+            }}
+          >
+            <Droppable droppableId="droppable">
+              {(provided, snapshot) => (
+                <div
+                  {...provided.droppableProps}
+                  ref={provided.innerRef}
+                  style={getListStyle(snapshot.isDraggingOver)}
+                >
+                  {state.onDeck.map((name, index) => (
+                    <Draggable
+                      key={`onDeck.${index}`}
+                      draggableId={`onDeck.${index}`}
+                      index={index}
+                    >
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          style={getItemStyle(
+                            snapshot.isDragging,
+                            provided.draggableProps.style
+                          )}
+                        >
+                          <span onClick={(e) => handleDelete(name)}>
+                            {deleteIcon}
+                          </span>
+                          {name}
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
           <p></p>
           <div>
             <AddPerson
@@ -236,3 +287,30 @@ function shuffle<T>(unshuffled: T[]): T[] {
     .sort((a, b) => a.sort - b.sort)
     .map((a) => a.value);
 }
+
+function reorder<T>(list: T[], startIndex: number, endIndex: number): T[] {
+  const result = Array.from(list);
+  const [removed] = result.splice(startIndex, 1);
+  result.splice(endIndex, 0, removed);
+
+  return result;
+}
+
+const grid = 8;
+
+const getListStyle = (isDraggingOver: boolean) => ({
+  // background: isDraggingOver ? "lightgrey" : undefined,
+  padding: grid,
+  width: 250,
+});
+
+const getItemStyle = (isDragging: boolean, draggableStyle: any) => ({
+  // some basic styles to make the items look a bit nicer
+  userSelect: "none",
+  // padding: grid * 2,
+  marginBottom: `${grid}px`,
+  // margin: `0 0 ${grid}px 0`,
+
+  // styles we need to apply on draggables
+  ...draggableStyle,
+});
