@@ -2,7 +2,6 @@ import React, { useRef, useState } from "react";
 import "./App.css";
 
 import produce from "immer";
-import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 
 import { Footer } from "./Footer";
 import { shuffle } from "./utils";
@@ -135,7 +134,8 @@ function App() {
     <div style={{ maxWidth: "500px", margin: "auto" }}>
       <div>
         <samp style={{ fontSize: 50 }}>
-          {state.inProgress ? state.inProgress.time + `s` : timerState}
+          {state.inProgress ? state.inProgress.time + `s` : timerState}{" "}
+          {state.inProgress && state.inProgress.name}
         </samp>
         <p></p>
         <div>{timerButton[timerState]}</div>
@@ -179,7 +179,15 @@ function App() {
         <p></p>
       </div>
       {totalTime !== undefined && (
-        <samp>{formatTime(totalTime) + ` total`}</samp>
+        <samp>
+          {formatTime(totalTime) + ` total`}
+          <br />
+          {formatTime(
+            Math.floor(
+              totalTime / (state.done.length + (state.inProgress ? 1 : 0))
+            )
+          ) + ` average`}
+        </samp>
       )}
       <Footer />
     </div>

@@ -1,7 +1,5 @@
-import React, { useRef, useState } from "react";
 import "./App.css";
 
-import produce from "immer";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import { reorder } from "./utils";
 
