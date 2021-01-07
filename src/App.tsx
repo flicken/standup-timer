@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import "./App.css";
 
 import produce from "immer";
@@ -7,6 +7,10 @@ import { Footer } from "./Footer";
 import { shuffle } from "./utils";
 import OnDeck from "./OnDeck";
 import AddPerson from "./AddPerson";
+
+import useLocalStorage from "react-use/lib/useLocalStorage";
+import useHarmonicIntervalFn from "react-use/lib/useHarmonicIntervalFn";
+import { People, ReservePerson } from "./People";
 
 type Person = {
   name: string;
@@ -22,51 +26,48 @@ type State = {
 };
 
 function App() {
-  const timeoutRef = useRef<any>();
-
-  const [people, setPeople] = useState<string[]>(
-    shuffle(
-      JSON.parse(
-        localStorage.getItem("people") || `["Brian", "Andrew", "Greg"]`
-      )
-    )
-  );
+  const [people, setPeople] = useLocalStorage<ReservePerson[]>("people", [
+    { name: "Andrew" },
+    { name: "Brian" },
+    { name: "Greg" },
+  ]);
   const [state, setState] = useState<State>({
-    onDeck: people,
+    onDeck: (people || []).filter((p) => p.active).map((p) => p.name),
     done: [],
   });
 
   var timerState: TimerState = "Ready";
-  if (people.length === 0) {
-    timerState = "Waiting";
-  } else if (state.inProgress) {
+  if (state.inProgress) {
     timerState = "Playing";
+  } else if (state.onDeck.length === 0 && state.done.length == 0) {
+    timerState = "Waiting";
   } else if (state.onDeck.length === 0) {
     timerState = "Done";
   }
 
-  const handleDelete = (name: string, index: number) => {
-    if (people.indexOf(name) !== -1) {
-      setPeople((p) => {
-        const newPeople = p.filter((n: string) => n !== name);
-        localStorage.setItem("people", JSON.stringify(newPeople));
-        return newPeople;
-      });
+  useHarmonicIntervalFn(
+    () => {
       setState(
         produce((draft) => {
-          draft.onDeck = draft.onDeck.filter((n: string) => n !== name);
+          draft.timer += 1;
+
+          if (draft.inProgress) {
+            draft.inProgress.time = draft.timer;
+          }
+          return;
         })
       );
-    }
+    },
+    timerState === "Done" ? null : 1000
+  );
+
+  const handleDelete = (name: string, index: number) => {
+    toggleActive({ name: name, active: true });
   };
 
   const handleAdd = (name: string) => {
-    if (people.indexOf(name) === -1) {
-      setPeople((p) => {
-        const newPeople = [...p, name];
-        localStorage.setItem("people", JSON.stringify(newPeople));
-        return newPeople;
-      });
+    if (!people?.some((e) => e.name === name)) {
+      setPeople((p) => [...(p || []), { name: name, active: true }]);
       setState(
         produce((draft) => {
           draft.onDeck.push(name);
@@ -76,9 +77,6 @@ function App() {
   };
 
   const handleNext = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
     setState(
       produce((draft) => {
         draft.timer = 0;
@@ -97,26 +95,41 @@ function App() {
         return;
       })
     );
-
-    if (timerState !== "Done") {
-      timeoutRef.current = setInterval(() => {
-        setState(
-          produce((draft) => {
-            draft.timer += 1;
-
-            if (draft.inProgress) {
-              draft.inProgress.time = draft.timer;
-            }
-            return;
-          })
-        );
-      }, 1000);
-    }
   };
 
+  const toggleActive = (person: ReservePerson) => {
+    const shouldActivate = !person.active;
+
+    setPeople(
+      (people || []).map((p: ReservePerson) => {
+        if (p.name === person.name) {
+          p.active = shouldActivate;
+        }
+        return p;
+      })
+    );
+
+    setState(
+      produce((draft) => {
+        if (shouldActivate) {
+          draft.onDeck.push(person.name);
+        } else {
+          draft.onDeck = draft.onDeck.filter(
+            (name: string) => name !== person.name
+          );
+        }
+      })
+    );
+  };
+
+  const onDeckCount = state.onDeck.length;
+  const doneCount = state.done.length;
+  const inProgressOrDoneCount = doneCount + (state.inProgress ? 1 : 0);
+  const totalCount = onDeckCount + inProgressOrDoneCount;
+
   const timerButton = {
-    Ready: <button onClick={handleNext}>Start</button>,
-    Playing: <button onClick={handleNext}>Next</button>,
+    Ready: <button onClick={handleNext}>Start {onDeckCount}</button>,
+    Playing: <button onClick={handleNext}>Next {onDeckCount}</button>,
     Done: <>All done!</>,
     Waiting: <>Please enter at least one name.</>,
   };
@@ -131,7 +144,15 @@ function App() {
   }
 
   return (
-    <div style={{ maxWidth: "500px", margin: "auto" }}>
+    <div
+      style={{
+        padding: "20px",
+        margin: "auto",
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gridGap: "10px",
+      }}
+    >
       <div>
         <samp style={{ fontSize: 50 }}>
           {state.inProgress ? state.inProgress.time + `s` : timerState}{" "}
@@ -165,30 +186,48 @@ function App() {
             }
             handleDelete={handleDelete}
           />
+        </samp>
+        {totalTime !== undefined && (
+          <samp>
+            {formatTime(totalTime) +
+              ` total ${inProgressOrDoneCount} / ${totalCount}`}
+            <br />
+            {formatTime(
+              Math.floor(totalTime / (doneCount + (state.inProgress ? 1 : 0)))
+            ) + ` average`}
+          </samp>
+        )}
+      </div>
+      <div>
+        <div>
+          <button
+            onClick={() => {
+              setState(
+                produce((state) => {
+                  state.onDeck = shuffle(state.onDeck);
+                })
+              );
+            }}
+          >
+            Shuffle
+          </button>
           <div>
-            <AddPerson
-              onAdd={handleAdd}
-              placeholder={
-                timerState === "Playing" || timerState === "Done"
-                  ? "Late arrival"
-                  : "Enter a name"
+            <AddPerson onAdd={handleAdd} placeholder={"Enter a name"} />
+            <People
+              people={people || []}
+              isDisabled={(person) =>
+                Boolean(
+                  state.inProgress?.name == person.name ||
+                    state.done.find((p) => p.name === person.name)
+                )
               }
+              toggleActive={toggleActive}
             />
           </div>
-        </samp>
+        </div>
+
         <p></p>
       </div>
-      {totalTime !== undefined && (
-        <samp>
-          {formatTime(totalTime) + ` total`}
-          <br />
-          {formatTime(
-            Math.floor(
-              totalTime / (state.done.length + (state.inProgress ? 1 : 0))
-            )
-          ) + ` average`}
-        </samp>
-      )}
       <Footer />
     </div>
   );
@@ -202,3 +241,15 @@ function formatTime(seconds: number): string {
 
   return [m > 9 ? m : "0" + m || "0", s > 9 ? s : "0" + s].join(":");
 }
+
+const deleteIcon = (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    height="20"
+    viewBox="0 0 24 24"
+    width="20"
+  >
+    <path d="M0 0h24v24H0z" fill="none" />
+    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+  </svg>
+);
