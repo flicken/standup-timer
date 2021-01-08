@@ -27,7 +27,6 @@ export default function AddPerson({
         value={value}
         onChange={(e) => setValue(e.target.value)}
       ></input>
-      <button type="submit">Add</button>
     </form>
   );
 }

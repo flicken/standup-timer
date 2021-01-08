@@ -6,7 +6,6 @@ import produce from "immer";
 import { Footer } from "./Footer";
 import { shuffle } from "./utils";
 import OnDeck from "./OnDeck";
-import AddPerson from "./AddPerson";
 
 import useLocalStorage from "react-use/lib/useLocalStorage";
 import useHarmonicIntervalFn from "react-use/lib/useHarmonicIntervalFn";
@@ -39,7 +38,7 @@ function App() {
   var timerState: TimerState = "Ready";
   if (state.inProgress) {
     timerState = "Playing";
-  } else if (state.onDeck.length === 0 && state.done.length == 0) {
+  } else if (state.onDeck.length === 0 && state.done.length === 0) {
     timerState = "Waiting";
   } else if (state.onDeck.length === 0) {
     timerState = "Done";
@@ -66,14 +65,30 @@ function App() {
   };
 
   const handleAdd = (name: string) => {
-    if (!people?.some((e) => e.name === name)) {
-      setPeople((p) => [...(p || []), { name: name, active: true }]);
-      setState(
-        produce((draft) => {
+    setPeople((p) => {
+      if (p?.find((e) => e.name === name)) {
+        return p;
+      }
+      return [...(p || []), { name: name, active: true }];
+    });
+    setState(
+      produce((draft) => {
+        if (!draft.onDeck.find((n: string) => n === name)) {
           draft.onDeck.push(name);
-        })
-      );
-    }
+        }
+      })
+    );
+  };
+  const deletePerson = (person: ReservePerson) => {
+    setPeople((people || []).filter((p) => p.name !== person.name));
+    setState(
+      produce((draft) => {
+        draft.onDeck = draft.onDeck.filter(
+          (name: string) => name !== person.name
+        );
+        return;
+      })
+    );
   };
 
   const handleNext = () => {
@@ -212,16 +227,17 @@ function App() {
             Shuffle
           </button>
           <div>
-            <AddPerson onAdd={handleAdd} placeholder={"Enter a name"} />
             <People
               people={people || []}
               isDisabled={(person) =>
                 Boolean(
-                  state.inProgress?.name == person.name ||
+                  state.inProgress?.name === person.name ||
                     state.done.find((p) => p.name === person.name)
                 )
               }
               toggleActive={toggleActive}
+              addPerson={handleAdd}
+              deletePerson={deletePerson}
             />
           </div>
         </div>
@@ -241,15 +257,3 @@ function formatTime(seconds: number): string {
 
   return [m > 9 ? m : "0" + m || "0", s > 9 ? s : "0" + s].join(":");
 }
-
-const deleteIcon = (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    height="20"
-    viewBox="0 0 24 24"
-    width="20"
-  >
-    <path d="M0 0h24v24H0z" fill="none" />
-    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-  </svg>
-);
