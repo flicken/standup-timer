@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import "./App.css";
 
 import produce from "immer";
@@ -7,7 +7,6 @@ import { Footer } from "./Footer";
 import { shuffle } from "./utils";
 import OnDeck from "./OnDeck";
 
-import useLocalStorage from "react-use/lib/useLocalStorage";
 import useHarmonicIntervalFn from "react-use/lib/useHarmonicIntervalFn";
 import { People, ReservePerson } from "./People";
 
@@ -26,12 +25,14 @@ type State = {
 
 function App() {
   const [people, setPeople] = useLocalStorage<ReservePerson[]>("people", [
-    { name: "Andrew" },
+    { name: "Andrew", active: true },
     { name: "Brian" },
     { name: "Greg" },
   ]);
   const [state, setState] = useState<State>({
-    onDeck: (people || []).filter((p) => p.active).map((p) => p.name),
+    onDeck: (people || [])
+      .filter((p: ReservePerson) => p.active)
+      .map((p: ReservePerson) => p.name),
     done: [],
   });
 
@@ -80,7 +81,9 @@ function App() {
     );
   };
   const deletePerson = (person: ReservePerson) => {
-    setPeople((people || []).filter((p) => p.name !== person.name));
+    setPeople((pp) => {
+      return (pp || []).filter((p) => p.name !== person.name);
+    });
     setState(
       produce((draft) => {
         draft.onDeck = draft.onDeck.filter(
@@ -115,8 +118,8 @@ function App() {
   const toggleActive = (person: ReservePerson) => {
     const shouldActivate = !person.active;
 
-    setPeople(
-      (people || []).map((p: ReservePerson) => {
+    setPeople((pp) =>
+      (pp || []).map((p: ReservePerson) => {
         if (p.name === person.name) {
           p.active = shouldActivate;
         }
@@ -174,7 +177,22 @@ function App() {
           {state.inProgress && state.inProgress.name}
         </samp>
         <p></p>
-        <div>{timerButton[timerState]}</div>
+        <div>
+          {timerButton[timerState]}{" "}
+          {onDeckCount > 1 && (
+            <button
+              onClick={() => {
+                setState(
+                  produce((state) => {
+                    state.onDeck = shuffle(state.onDeck);
+                  })
+                );
+              }}
+            >
+              Shuffle
+            </button>
+          )}
+        </div>
         <p></p>
         <samp style={{ fontSize: 20 }}>
           {state.done.map((person, i) => (
@@ -215,17 +233,6 @@ function App() {
       </div>
       <div>
         <div>
-          <button
-            onClick={() => {
-              setState(
-                produce((state) => {
-                  state.onDeck = shuffle(state.onDeck);
-                })
-              );
-            }}
-          >
-            Shuffle
-          </button>
           <div>
             <People
               people={people || []}
@@ -256,4 +263,70 @@ function formatTime(seconds: number): string {
   const s = Math.round(seconds % 60);
 
   return [m > 9 ? m : "0" + m || "0", s > 9 ? s : "0" + s].join(":");
+}
+
+// https://usehooks-typescript.com/react-hook/use-local-storage
+function useLocalStorage<T>(
+  key: string,
+  initialValue: T
+): [T, (f: (value: T) => T) => void] {
+  // Get from local storage then
+  // parse stored json or return initialValue
+  const readValue = () => {
+    // Prevent build error "window is undefined" but keep keep working
+    if (typeof window === "undefined") {
+      return initialValue;
+    }
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.warn(`Error reading localStorage key “${key}”:`, error);
+      return initialValue;
+    }
+  };
+  // State to store our value
+  // Pass initial state function to useState so logic is only executed once
+  const [storedValue, setStoredValue] = useState(readValue);
+  // Return a wrapped version of useState's setter function that ...
+  // ... persists the new value to localStorage.
+  const setValue = (f: (value: T) => T) => {
+    // Prevent build error "window is undefined" but keep keep working
+    if (typeof window == "undefined") {
+      console.warn(
+        `Tried setting localStorage key “${key}” even though environment is not a client`
+      );
+    }
+    try {
+      // Allow value to be a function so we have the same API as useState
+      const newValue = f(storedValue);
+      // Save to local storage
+      window.localStorage.setItem(key, JSON.stringify(newValue));
+      // Save state
+      setStoredValue(newValue);
+      // We dispatch a custom event so every useLocalStorage hook are notified
+      window.dispatchEvent(new Event("local-storage"));
+    } catch (error) {
+      console.warn(`Error setting localStorage key “${key}”:`, error);
+    }
+  };
+  useEffect(() => {
+    setStoredValue(readValue());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setStoredValue(readValue());
+    };
+    // this only works for other documents, not the current one
+    window.addEventListener("storage", handleStorageChange);
+    // this is a custom event, triggered in writeValueToLocalStorage
+    window.addEventListener("local-storage", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("local-storage", handleStorageChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return [storedValue, setValue];
 }

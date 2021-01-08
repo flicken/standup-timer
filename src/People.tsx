@@ -55,7 +55,6 @@ export const People = ({
             return;
           }
           const person = sortedPeople[result.source.index];
-          console.log("Deleting,", person);
           deletePerson(person);
         }}
       >
@@ -71,6 +70,7 @@ export const People = ({
                 }}
               >
                 {deleteIcon}
+                {provided.placeholder}
               </div>
             )}
           </Droppable>
