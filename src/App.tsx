@@ -30,9 +30,9 @@ function App() {
     { name: "Greg" },
   ]);
   const [state, setState] = useState<State>({
-    onDeck: (people || [])
+    onDeck: shuffle((people || [])
       .filter((p: ReservePerson) => p.active)
-      .map((p: ReservePerson) => p.name),
+      .map((p: ReservePerson) => p.name)),
     done: [],
   });
 
