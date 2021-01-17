@@ -3,6 +3,8 @@ import "./App.css";
 
 import produce from "immer";
 
+import TextareaAutosize from "react-textarea-autosize";
+
 import { Footer } from "./Footer";
 import { shuffle } from "./utils";
 import OnDeck from "./OnDeck";
@@ -30,9 +32,11 @@ function App() {
     { name: "Greg" },
   ]);
   const [state, setState] = useState<State>({
-    onDeck: shuffle((people || [])
-      .filter((p: ReservePerson) => p.active)
-      .map((p: ReservePerson) => p.name)),
+    onDeck: shuffle(
+      (people || [])
+        .filter((p: ReservePerson) => p.active)
+        .map((p: ReservePerson) => p.name)
+    ),
     done: [],
   });
 
@@ -230,6 +234,8 @@ function App() {
             ) + ` average`}
           </samp>
         )}
+
+        <TextareaAutosize name="next" minRows={4} placeholder="Blockers" />
       </div>
       <div>
         <div>
