@@ -10,7 +10,7 @@ import OnDeck from "./OnDeck";
 import useInterval from "react-use/lib/useInterval";
 import { People } from "./People";
 
-import { observeDeep } from "@syncedstore/core";
+import { observeDeep, areSame } from "@syncedstore/core";
 import { useSyncedStore } from "@syncedstore/react";
 import { store, ReservePerson, Person, useSync } from "./store";
 
@@ -42,17 +42,19 @@ function App() {
   };
 
   const handleAdd = (name: string) => {
-    pushUnless(state.people, (e) => e.name === name, {
+    pushUnless(state.people, (e) => areSame(e.name, name), {
       name: name,
       active: true,
     });
 
-    pushUnless(state.onDeck, (n: string) => n === name, name);
+    pushUnless(state.onDeck, (n: string) => areSame(n, name), name);
   };
 
   function removeIf<A>(array: A[], f: (a: A) => boolean) {
     const index = array.findIndex(f);
-    array.splice(index);
+    if (index !== -1) {
+      array.splice(index, 1);
+    }
   }
 
   function pushUnless<A>(array: A[], f: (a: A) => boolean, item: A) {
@@ -67,8 +69,9 @@ function App() {
   }
 
   const deletePerson = (person: ReservePerson) => {
-    removeIf(state.people, (p) => p.name === person.name);
-    removeIf(state.onDeck, (p) => p === person.name);
+    removeIf(state.onDeck, (p) => areSame(p, person.name));
+    removeIf(state.done, (p) => areSame(p.name, person.name));
+    removeIf(state.people, (p) => areSame(p.name, person.name));
   };
 
   const handleReset = () => {
@@ -108,7 +111,7 @@ function App() {
     if (shouldActivate) {
       state.onDeck.push(person.name);
     } else {
-      removeIf(state.onDeck, (name) => name === person.name);
+      removeIf(state.onDeck, (name) => areSame(name, person.name));
     }
   };
 
@@ -219,8 +222,8 @@ function App() {
               people={state.people || []}
               isDisabled={(person) =>
                 Boolean(
-                  state.inProgress.name === person.name ||
-                    state.done.find((p) => p.name === person.name)
+                  areSame(state.inProgress.name, person.name) ||
+                    state.done.find((p) => areSame(p.name, person.name))
                 )
               }
               toggleActive={toggleActive}
