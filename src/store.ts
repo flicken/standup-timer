@@ -9,8 +9,6 @@ export type Person = {
   time: number;
 };
 
-type TimerState = "Waiting" | "Ready" | "Playing" | "Done";
-
 export type InProgress = {
   name?: String;
   start?: number;
@@ -41,7 +39,7 @@ export const useSync = (name: string) => {
     return () => {
       disconnect();
     };
-  }, []);
+  }, [name]);
 
   return synced;
 };

@@ -16,15 +16,7 @@ import { store, ReservePerson, Person, useSync } from "./store";
 
 type TimerState = "Waiting" | "Ready" | "Playing" | "Done";
 
-type State = {
-  people: ReservePerson[];
-  onDeck: string[];
-  inProgress: Person;
-  done: Person[];
-};
-
 const currentURL = window.location.href; // returns the absolute URL of a page
-const pathname = window.location.pathname || "default-room"; //returns the current url minus the domain name
 
 function App() {
   const state = useSyncedStore(store);
@@ -46,10 +38,10 @@ function App() {
   }
 
   useEffect(() => {
-    observeDeep(state.inProgress, () => {
+    return observeDeep(state.inProgress, () => {
       setTimer(0);
     });
-  }, []);
+  }, [state.inProgress]);
 
   useInterval(
     () => setTimer((t) => Math.round(Math.max(t + 1, timeElapsed / 1000))),
