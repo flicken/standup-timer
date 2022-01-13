@@ -1,7 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./App.css";
-
-import produce from "immer";
 
 import TextareaAutosize from "react-textarea-autosize";
 
@@ -11,10 +9,14 @@ import OnDeck from "./OnDeck";
 
 import useHarmonicIntervalFn from "react-use/lib/useHarmonicIntervalFn";
 import { People, ReservePerson } from "./People";
-import useLocalStorage from "./useLocalStorage";
+
+import * as Y from "yjs";
+import { IndexeddbPersistence } from "y-indexeddb";
+import { WebrtcProvider } from "y-webrtc";
 
 type Person = {
   name: string;
+  active?: boolean;
   time: number;
 };
 
@@ -24,22 +26,123 @@ type State = {
   onDeck: string[];
   inProgress?: Person;
   done: Person[];
+  timer: number;
 };
 
-function App() {
-  const [people, setPeople] = useLocalStorage<ReservePerson[]>("people", [
-    { name: "Andrew", active: true },
-    { name: "Brian" },
-    { name: "Greg" },
-  ]);
-  const [state, setState] = useState<State>({
-    onDeck: shuffle(
-      (people || [])
-        .filter((p: ReservePerson) => p.active)
-        .map((p: ReservePerson) => p.name)
-    ),
-    done: [],
+const ydoc = new Y.Doc();
+
+const yPeople = ydoc.getMap("people");
+const yState = ydoc.getMap("state");
+
+if (!yState.has("onDeck")) {
+  yState.set("onDeck", new Y.Array());
+}
+if (!yState.has("done")) {
+  yState.set("done", new Y.Array());
+}
+
+function getOnDeck(yState: Y.Map<any>): Y.Array<string> {
+  return yState.get("onDeck");
+}
+
+function getDone(yState: Y.Map<any>): Y.Array<any> {
+  return yState.get("done");
+}
+
+function stateFromDocs(
+  yState: Y.Map<any>,
+  yPeople: Y.Map<any>,
+  shouldShuffle: boolean = false
+): State {
+  const inProgressName = yState.get("inProgress");
+  const done = (getDone(yState).toArray() || [])
+    .flatMap((name) => {
+      const person = yPeople.get(name) as Y.Map<any>;
+      return person?.toJSON();
+    })
+    .filter((k) => k);
+  const onDeck = getOnDeck(yState).toArray();
+  const state = {
+    onDeck: shouldShuffle ? shuffle(onDeck) : onDeck,
+    inProgress: (yPeople.get(inProgressName) as Y.Map<any>)?.toJSON(),
+    done: done,
+    timer: yState.get("timer") as number,
+  };
+  return state;
+}
+
+function peopleFromDocs(yState: Y.Map<any>, yPeople: Y.Map<any>): Person[] {
+  const people: Person[] = [];
+  yPeople.forEach((value, key) => {
+    const person = (value as Y.Map<any>)?.toJSON() as Person;
+    if (person) {
+      people.push(person);
+    }
   });
+  return people;
+}
+
+function App() {
+  const [people, setPeople] = useState<Person[]>(() =>
+    peopleFromDocs(yState, yPeople)
+  );
+  const [state, setState] = useState<State>(() =>
+    stateFromDocs(yState, yPeople, true)
+  );
+  const [timer, setTimer] = useState<number | undefined>(() => {
+    const start = yState.get("start") as number;
+    if (start) {
+      return Date.now() - start;
+    } else {
+      return 0;
+    }
+  });
+  const [synced, setSynced] = useState(false);
+
+  useEffect(() => {
+    const observer = (allEvents: any) => {
+      if (allEvents.find((e: Y.YEvent) => e.changes.keys.has("start"))) {
+        setTimer(0);
+      }
+      setState(() => stateFromDocs(yState, yPeople));
+    };
+    yState.observeDeep(observer);
+    return () => {
+      yState.unobserveDeep(observer);
+    };
+  }, []);
+
+  useEffect(() => {
+    const observer = (event: any) => {
+      setPeople(() => peopleFromDocs(yState, yPeople));
+    };
+    yPeople.observeDeep(observer);
+
+    return () => {
+      yPeople.unobserveDeep(observer);
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      const webrtc = new WebrtcProvider("standup.flicken.net", ydoc, {
+        password: "standup.flicken.net",
+      } as any);
+      return () => {
+        webrtc.disconnect();
+      };
+    } catch {
+      /* */
+    }
+  }, []);
+
+  useEffect(() => {
+    const provider = new IndexeddbPersistence("standup", ydoc);
+
+    provider.on("synced", () => {
+      setSynced(true);
+    });
+  }, []);
 
   var timerState: TimerState = "Ready";
   if (state.inProgress) {
@@ -52,16 +155,9 @@ function App() {
 
   useHarmonicIntervalFn(
     () => {
-      setState(
-        produce((draft) => {
-          draft.timer += 1;
-
-          if (draft.inProgress) {
-            draft.inProgress.time = draft.timer;
-          }
-          return;
-        })
-      );
+      if (timerState === "Playing") {
+        setTimer((timer) => (timer || 0) + 1);
+      }
     },
     timerState === "Done" ? null : 1000
   );
@@ -70,79 +166,119 @@ function App() {
     toggleActive({ name: name, active: true });
   };
 
+  const handleSetNames = (names: string[]) => {
+    const onDeck = getOnDeck(yState);
+    onDeck.delete(0, onDeck.length);
+    onDeck.push(names);
+  };
+
   const handleAdd = (name: string) => {
-    setPeople((p) => {
-      if (p?.find((e) => e.name === name)) {
-        return p;
+    ydoc.transact(() => {
+      if (!yPeople.has(name)) {
+        const person = new Y.Map();
+        person.set("name", name);
+        person.set("active", true);
+        yPeople.set(name, person);
       }
-      return [...(p || []), { name: name, active: true }];
+
+      const onDeck = getOnDeck(yState);
+      if (!onDeck.toArray().find((n: string) => n === name)) {
+        onDeck.push([name]);
+      }
     });
-    setState(
-      produce((draft) => {
-        if (!draft.onDeck.find((n: string) => n === name)) {
-          draft.onDeck.push(name);
-        }
-      })
-    );
   };
   const deletePerson = (person: ReservePerson) => {
-    setPeople((pp) => {
-      return (pp || []).filter((p) => p.name !== person.name);
+    ydoc.transact(() => {
+      yPeople.delete(person.name);
+      // TODO Refactor onDeck to be hash to allow easier removing, with priority rank
+      const onDeck = getOnDeck(yState);
+      const index = onDeck.toArray().findIndex((name) => name === person.name);
+      if (index !== -1) {
+        onDeck.delete(index, 1);
+      }
     });
-    setState(
-      produce((draft) => {
-        draft.onDeck = draft.onDeck.filter(
-          (name: string) => name !== person.name
-        );
-        return;
-      })
-    );
+  };
+
+  const handleReset = () => {
+    ydoc.transact(() => {
+      const done = getDone(yState);
+      const allNames = done.toArray();
+      done.delete(0, done.length);
+      const onDeck = getOnDeck(yState);
+      allNames.push(onDeck.toArray());
+      onDeck.delete(0, onDeck.length);
+      onDeck.push(allNames.filter((i) => i && i.length));
+      yState.set("timer", 0);
+      yState.delete("inProgress");
+      yState.delete("start");
+      yPeople.forEach((person: any, name: string) => {
+        person.set("time", 0);
+      });
+    });
+  };
+
+  const updateTime = (
+    inProgressName: string | null | undefined,
+    previousStart: number | null | undefined,
+    now: number
+  ) => {
+    if (previousStart && inProgressName) {
+      const inProgress = yPeople.get(inProgressName) as Y.Map<any>;
+      inProgress?.set(
+        "time",
+        Math.round((now - (previousStart as number)) / 1000)
+      );
+    }
   };
 
   const handleNext = () => {
-    setState(
-      produce((draft) => {
-        draft.timer = 0;
-        if (draft.inProgress) {
-          draft.done = [...draft.done, draft.inProgress];
+    ydoc.transact(() => {
+      const now = Date.now();
+
+      if (yState.has("inProgress")) {
+        const inProgressName = yState.get("inProgress") as string;
+        const previousStart = yState.get("start") as number;
+        updateTime(inProgressName, previousStart, now);
+        if (typeof inProgressName === "string") {
+          const done = getDone(yState);
+          done.push([inProgressName]);
         }
-        const nextName = draft.onDeck.shift();
-        if (nextName !== undefined) {
-          draft.inProgress = {
-            name: nextName,
-            time: 0,
-          };
-        } else {
-          draft.inProgress = undefined;
-        }
-        return;
-      })
-    );
+      }
+      yState.set("start", now);
+
+      const onDeck = getOnDeck(yState);
+      if (onDeck.length > 0) {
+        const inProgressName = onDeck.get(0);
+        yState.set("inProgress", inProgressName);
+        const inProgress = yPeople.get(inProgressName) as Y.Map<any>;
+        inProgress?.set("time", 0);
+        onDeck.delete(0, 1);
+      } else {
+        yState.delete("inProgress");
+      }
+    });
   };
 
   const toggleActive = (person: ReservePerson) => {
     const shouldActivate = !person.active;
 
-    setPeople((pp) =>
-      (pp || []).map((p: ReservePerson) => {
-        if (p.name === person.name) {
-          p.active = shouldActivate;
+    ydoc.transact(() => {
+      const yPerson = yPeople.get(person.name) as Y.Map<any>;
+      if (yPerson) {
+        yPerson.set("active", !yPerson.get("active"));
+      }
+      if (shouldActivate) {
+        getOnDeck(yState).push([person.name]);
+      } else {
+        const onDeck = getOnDeck(yState);
+        const index = onDeck
+          .toArray()
+          .findIndex((name) => name === person.name);
+        if (index !== -1) {
+          onDeck.delete(index, 1);
         }
-        return p;
-      })
-    );
-
-    setState(
-      produce((draft) => {
-        if (shouldActivate) {
-          draft.onDeck.push(person.name);
-        } else {
-          draft.onDeck = draft.onDeck.filter(
-            (name: string) => name !== person.name
-          );
-        }
-      })
-    );
+      }
+    });
   };
 
   const onDeckCount = state.onDeck.length;
@@ -153,11 +289,11 @@ function App() {
   const timerButton = {
     Ready: <button onClick={handleNext}>Start {onDeckCount}</button>,
     Playing: <button onClick={handleNext}>Next {onDeckCount}</button>,
-    Done: <>All done!</>,
+    Done: <button onClick={handleReset}>Reset</button>,
     Waiting: <>Please enter at least one name.</>,
   };
 
-  var totalTime = state.inProgress?.time;
+  var totalTime = timer;
   if (state.done.length > 0) {
     totalTime = totalTime || 0;
     totalTime += state.done.reduce(
@@ -166,6 +302,9 @@ function App() {
     );
   }
 
+  if (!synced) {
+    return <div>Loading...</div>;
+  }
   return (
     <div
       style={{
@@ -178,7 +317,7 @@ function App() {
     >
       <div>
         <samp style={{ fontSize: 50 }}>
-          {state.inProgress ? state.inProgress.time + `s` : timerState}{" "}
+          {state.inProgress ? timer + `s` : timerState}{" "}
           {state.inProgress && state.inProgress.name}
         </samp>
         <p></p>
@@ -187,11 +326,9 @@ function App() {
           {onDeckCount > 1 && (
             <button
               onClick={() => {
-                setState(
-                  produce((state) => {
-                    state.onDeck = shuffle(state.onDeck);
-                  })
-                );
+                const onDeck = getOnDeck(yState);
+
+                handleSetNames(shuffle(onDeck.toArray()));
               }}
             >
               Shuffle
@@ -208,20 +345,14 @@ function App() {
           {state.inProgress && (
             <div key="in-progress">
               <b>
-                {state.inProgress.time}s {state.inProgress.name}
+                {timer}s {state.inProgress.name}
               </b>
             </div>
           )}
           <p></p>
           <OnDeck
             names={state.onDeck}
-            setNames={(names) =>
-              setState(
-                produce((state) => {
-                  state.onDeck = names;
-                })
-              )
-            }
+            setNames={handleSetNames}
             handleDelete={handleDelete}
           />
         </samp>
