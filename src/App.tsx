@@ -40,6 +40,7 @@ function App() {
     ),
     done: [],
   });
+  const [timer, setTimer] = useState<number>(0);
 
   var timerState: TimerState = "Ready";
   if (state.inProgress) {
@@ -51,19 +52,8 @@ function App() {
   }
 
   useHarmonicIntervalFn(
-    () => {
-      setState(
-        produce((draft) => {
-          draft.timer += 1;
-
-          if (draft.inProgress) {
-            draft.inProgress.time = draft.timer;
-          }
-          return;
-        })
-      );
-    },
-    timerState === "Done" ? null : 1000
+    () => setTimer((t) => t + 1),
+    timerState === "Playing" ? 1000 : null
   );
 
   const handleDelete = (name: string, index: number) => {
@@ -102,7 +92,7 @@ function App() {
   const handleNext = () => {
     setState(
       produce((draft) => {
-        draft.timer = 0;
+        setTimer(0);
         if (draft.inProgress) {
           draft.done = [...draft.done, draft.inProgress];
         }
@@ -178,7 +168,7 @@ function App() {
     >
       <div>
         <samp style={{ fontSize: 50 }}>
-          {state.inProgress ? state.inProgress.time + `s` : timerState}{" "}
+          {state.inProgress ? timer + `s` : timerState}{" "}
           {state.inProgress && state.inProgress.name}
         </samp>
         <p></p>
@@ -208,7 +198,7 @@ function App() {
           {state.inProgress && (
             <div key="in-progress">
               <b>
-                {state.inProgress.time}s {state.inProgress.name}
+                {timer}s {state.inProgress.name}
               </b>
             </div>
           )}
