@@ -20,7 +20,7 @@ const currentURL = window.location.href; // returns the absolute URL of a page
 
 function App() {
   const state = useSyncedStore(store);
-  const synced = useSync(currentURL);
+  const loaded = useSync(currentURL);
 
   const now = Date.now();
   const timeElapsed = now - (state.inProgress.time || now);
@@ -144,7 +144,7 @@ function App() {
     );
   }
 
-  if (!synced) {
+  if (!loaded) {
     return <div>Loading...</div>;
   }
   return (
