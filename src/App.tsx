@@ -26,17 +26,6 @@ function App() {
   const timeElapsed = now - (state.inProgress.time || now);
   const [timer, setTimer] = useState<number>(Math.round(timeElapsed));
 
-  var timerState: TimerState = "Ready";
-  if (state.inProgress.name) {
-    timerState = "Playing";
-  } else if (state.onDeck.length === 0 && state.done.length === 0) {
-    timerState = "Waiting";
-  } else if (state.onDeck.length === 0) {
-    timerState = "Done";
-  } else {
-    timerState = "Ready";
-  }
-
   useEffect(() => {
     return observeDeep(state.inProgress, () => {
       setTimer(0);
@@ -127,6 +116,17 @@ function App() {
   const doneCount = state.done.length;
   const inProgressOrDoneCount = doneCount + (state.inProgress.name ? 1 : 0);
   const totalCount = onDeckCount + inProgressOrDoneCount;
+
+  var timerState: TimerState = "Ready";
+  if (state.inProgress.name) {
+    timerState = "Playing";
+  } else if (onDeckCount === 0 && doneCount === 0) {
+    timerState = "Waiting";
+  } else if (onDeckCount === 0) {
+    timerState = "Done";
+  } else {
+    timerState = "Ready";
+  }
 
   const timerButton = {
     Ready: <button onClick={handleNext}>Start {onDeckCount}</button>,
