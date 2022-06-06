@@ -23,16 +23,26 @@ const getListStyle = (isDraggingOver: boolean) => ({
   width: 250,
 });
 
-const getItemStyle = (isDragging: boolean, draggableStyle: any) => ({
-  // some basic styles to make the items look a bit nicer
-  userSelect: "none",
-  // padding: grid * 2,
-  marginBottom: `${grid}px`,
-  // margin: `0 0 ${grid}px 0`,
+const getItemStyle = (
+  isDragging: boolean,
+  isDropAnimating: boolean,
+  draggableStyle: any
+) => {
+  if (!isDropAnimating) {
+    return draggableStyle;
+  }
+  return {
+    // some basic styles to make the items look a bit nicer
+    userSelect: "none",
+    // padding: grid * 2,
+    marginBottom: `${grid}px`,
+    // margin: `0 0 ${grid}px 0`,
 
-  // styles we need to apply on draggables
-  ...draggableStyle,
-});
+    // styles we need to apply on draggables
+    ...draggableStyle,
+    transitionDuration: `0.001s`,
+  };
+};
 
 export const People = ({
   people,
@@ -95,6 +105,7 @@ export const People = ({
                           {...provided.dragHandleProps}
                           style={getItemStyle(
                             snapshot.isDragging,
+                            snapshot.isDropAnimating,
                             provided.draggableProps.style
                           )}
                           onClick={() => {
