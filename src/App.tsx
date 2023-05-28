@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import "./App.css";
 
-import produce from "immer";
+import { produce } from "immer";
 
 import TextareaAutosize from "react-textarea-autosize";
 
@@ -24,6 +24,7 @@ type State = {
   onDeck: string[];
   inProgress?: Person;
   done: Person[];
+  timer: number;
 };
 
 function App() {
@@ -39,6 +40,7 @@ function App() {
         .map((p: ReservePerson) => p.name)
     ),
     done: [],
+    timer: 0,
   });
 
   var timerState: TimerState = "Ready";
