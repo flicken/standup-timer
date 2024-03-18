@@ -21,6 +21,10 @@
     "typescript": "5.0.4",
     "web-vitals": "3.5.2"
   },
+  "resolutions": {
+    "@typescript-eslint/eslint-plugin": "5.10.0",
+    "@typescript-eslint/parser": "5.10.0"
+  },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
