@@ -34,6 +34,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
+  "type": "module",
   "browserslist": {
     "production": [
       ">0.2%",
